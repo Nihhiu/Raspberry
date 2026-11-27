@@ -101,23 +101,6 @@ python -m unittest discover agent/tests    # 90 tests
 
 ## Usage
 
-### With an AI client
-
-Open your MCP client in this folder and say what you want musically. For example:
-
-> *"Add a break with the piano between bars 97 and 113, following the motif and chord progression of the song."*
-
-The agent will:
-
-1. **Read** the project (channels, patterns, notes) — read-only, always first.
-2. **Analyze** it — density, extension, repetition, accents, key hypothesis, off-grid notes.
-3. **Propose** a concrete edit — explicit notes, never intentions, with a human-readable diff.
-4. **Ask** — a local approval dialog shows the diff; only your click creates the approval token.
-5. **Apply and verify** — writes atomically through the triple fence, then re-reads the project to confirm the result
-   note by note before claiming success.
-
-### Without an AI client
-
 The agent layer is a plain Python package — proposals, approval and application work the same way from a script:
 
 ```python
