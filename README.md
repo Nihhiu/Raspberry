@@ -1,48 +1,156 @@
-# Raspberry 🍇🔴
+<h1 align="center">Raspberry 🍇</h1>
 
-Agente de IA para composição MIDI no [LYNX SHARE](https://github.com/Ka1-S/LYNX-SHARE) — um DAW tipo FL-Studio. O nome: algo no tema do FL Studio, algo vermelho como o LYNX.
+<p align="center"><strong>An AI composition agent for <a href="https://github.com/Ka1-S/LYNX-SHARE">LYNX SHARE</a>.</strong><br>
+It observes your project, analyzes the music, and proposes MIDI edits — nothing is written until <em>you</em> approve it.<br>
+Named for something in the FL Studio theme: something red, like the LYNX.</p>
 
-O agente **observa** o projeto aberto no LYNX, **analisa** o conteúdo musical (densidade, ritmo, repetição, tonalidade) e **propõe** edições MIDI. Nada é escrito no projeto sem um **portão de aprovação humano**: um diálogo local com diff, onde um token de uso único nasce só do clique em "Aprovar".
+<p align="center">
+  <a href="#what-is-raspberry"><strong>About</strong></a> ·
+  <a href="#how-it-works"><strong>How it works</strong></a> ·
+  <a href="#getting-started"><strong>Getting started</strong></a> ·
+  <a href="#usage">Usage</a> ·
+  <a href="#safety">Safety</a> ·
+  <a href="#project-structure">Structure</a> ·
+  <a href="#status">Status</a>
+</p>
 
-## Arquitetura
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.12%2B-3776AB" alt="Python 3.12+">
+  <img src="https://img.shields.io/badge/tests-90%20passing-5cb85c" alt="90 tests passing">
+  <img src="https://img.shields.io/badge/Windows-10%20%C2%B7%2011-24292f" alt="Windows 10 and 11">
+  <img src="https://img.shields.io/badge/status-beta-f0ad4e" alt="Beta">
+</p>
+
+---
+
+## What is Raspberry?
+
+Raspberry is an AI agent that composes MIDI inside [LYNX SHARE](https://github.com/Ka1-S/LYNX-SHARE), a free and
+open-source DAW with the FL Studio workflow. It runs beside the DAW, reads the open project over LYNX's Remote
+Control API, and works in a strict rhythm: **observe → analyze → propose → ask → apply**.
+
+It is for you if you…
+
+- make music in LYNX SHARE and want an AI collaborator that works directly on the project, not on exported MIDI files;
+- want every write gated by an explicit human approval, with native undo as the safety net;
+- want the agent to respect your music: it reads the motif, harmony and groove before proposing anything, and preserves
+  every note attribute it does not touch.
+
+The agent layer is pure Python with no runtime dependencies. The transport is
+[lynx-mcp](https://github.com/ITAgnesmeyer/lynx-mcp), reused unmodified, which speaks the `lynx-control/1` protocol to
+the DAW over a local TCP loopback connection.
+
+## How it works
 
 ```
-OpenCode (agente) ──► lynx-mcp (transporte MCP, 26 ferramentas lynx_*)
-                          │  TCP loopback, protocolo lynx-control/1
-                          ▼
-                     LYNX SHARE (modelo nativo, fence triplo, undo nativo)
+You (approval dialog) ── approve / refuse
+        │
+OpenCode agent ── orchestrates ──► agent/lynx_agent (pure Python)
+        │                               │  analyze · propose · verify
+        ▼                               ▼
+   lynx-mcp (MCP transport, 26 lynx_* tools)
+        │  TCP loopback · lynx-control/1 · HMAC auth
+        ▼
+   LYNX SHARE (native model · triple fence · native undo)
 ```
 
-- **`agent/lynx_agent/`** — camada de agente em Python puro (sem transporte):
-  - `analysis.py` — analisador musical (densidade, extensão, off-grid/síncopa, acentos, repetição, hipótese de tonalidade por Krumhansl).
-  - `proposals.py` — contrato de proposta (ID + SHA-256 canónico) e cache de sessão que expira por sessão/projeto/revisão/prazo.
-  - `approval.py` — portão de aprovação (diálogo tkinter, token de uso único com prazo).
-  - `apply.py` — validação de notas (formato nativo), cálculo do novo estado, verificação pós-escrita por releitura.
-  - `transforms.py` — transposição, velocity, quantização, humanização (semente reprodutível), deslocamentos.
-  - `generation.py` — templates de groove (bateria/baixo) e fills com rampa de velocity.
-- **`skills/lynx-agent/SKILL.md`** — coreografia multi-ferramenta e regras invioláveis (nunca escrever sem token; read-first; a grelha é derivada, nunca fonte; nomes de canais são sugestões).
-- **`auditoria/`** — relatório da auditoria ao código do LYNX SHARE (modelo nativo, caminho de edição remota, garantias de escrita).
-- **`plan.md`** — plano mestre do projeto (fases 0–2C, todas validadas).
+Every proposed edit is a signed document: it binds the session, project, expected revision and a SHA-256 content hash,
+and expires by session, project, revision and time. Applying it requires a single-use approval token that is born only
+from your click on **Approve** — the agent can present the dialog, but can never create, edit or delete a token.
 
-## Garantias de escrita
+## Getting started
 
-- **Fence triplo** (`projectId` + `epoch` + `revision`) em toda escrita — se o projeto mudar, a escrita é recusada (`changed`).
-- **Tudo-ou-nada**: cada lote é validado por round-trip no formato nativo antes de commit; 1 lote aceite = 1 passo de undo nativo.
-- **Nunca repetir** um write com resultado `uncertain`.
-- Verificação obrigatória por releitura — o agente nunca alega sucesso sem confirmar.
+### Prerequisites
 
-## Testes
+- Windows 10/11 with [LYNX SHARE](https://github.com/Ka1-S/LYNX-SHARE/releases) 0.1.31.1 (alpha) installed
+- [Python 3.12+](https://www.python.org/downloads/) and [uv](https://docs.astral.sh/uv/)
+- An [OpenCode](https://opencode.ai) session running in this folder (picks up `opencode.json` automatically)
 
-```sh
-# a partir da raiz, com o .venv do lynx-mcp
+### Setup
+
+```bash
+# 1. Clone
+git clone https://github.com/Nihhiu/Raspberry.git
+cd Raspberry
+
+# 2. Get the MCP transport
+git clone https://github.com/ITAgnesmeyer/lynx-mcp.git
+uv sync --project lynx-mcp
+
+# 3. Start LYNX with remote control enabled
+uv run --project lynx-mcp python -m lynx_mcp.testhost start
+```
+
+### Run the tests
+
+```bash
 $env:PYTHONPATH = "agent"
-python -m unittest discover agent/tests
+python -m unittest discover agent/tests    # 90 tests
 ```
 
-## Estado
+## Usage
 
-- Fase 0 (auditoria) ✓ — decisão: reutilizar o lynx-mcp sem extensão C++.
-- Fase 1 (observação/análise/propostas) ✓
-- Fase 2A (escrita mínima com aprovação + undo/redo) ✓
-- Fase 2B (transformações) ✓ · Fase 2C (geração de grooves/fills) ✓
-- Usado em projeto real: break de piano de 16 compassos (38 notas) composto a partir do motif e progressão existentes, aplicado e verificado.
+Talk to the agent in OpenCode and say what you want musically. For example:
+
+> *"Add a break with the piano between bars 97 and 113, following the motif and chord progression of the song."*
+
+The agent will:
+
+1. **Read** the project (channels, patterns, notes) — read-only, always first.
+2. **Analyze** it — density, extension, repetition, accents, key hypothesis, off-grid notes.
+3. **Propose** a concrete edit — explicit notes, never intentions, with a human-readable diff.
+4. **Ask** — a local approval dialog shows the diff; only your click creates the approval token.
+5. **Apply and verify** — writes atomically through the triple fence, then re-reads the project to confirm the result
+   note by note before claiming success.
+
+Every accepted batch is one native undo step: rollback is always one `history.undo` away.
+
+## Safety
+
+| Guarantee | How |
+|---|---|
+| Nothing without your click | Single-use approval token, born only from the local approval dialog. 5-minute expiry, bound to the proposal hash. |
+| No stale writes | Triple fence (`projectId` + `epoch` + `revision`) enforced server-side; a proposal against an old revision is refused (`changed`). |
+| All or nothing | Each batch is validated by a full round-trip through the native format before commit; a failed validation writes nothing. |
+| Recording is sacred | Writes are refused by the DAW during recording or playback. |
+| Never claim unverified success | The agent re-reads the project after every write and compares the actual notes. |
+| `uncertain` is final | A write that answers `uncertain` may or may not have been applied — it is never retried automatically. |
+
+## Project structure
+
+```
+agent/
+  lynx_agent/            Pure-Python agent layer (no transport logic)
+    analysis.py          Musical analyzer (density, repetition, key hypothesis)
+    proposals.py         Proposal contract + session cache (SHA-256, TTL)
+    approval.py          Human approval gate (dialog + single-use token)
+    apply.py             Note validation, state computation, post-write verification
+    transforms.py        Transpose, velocity, quantize, humanize, displace
+    generation.py        Drum/bass groove templates and fills (seeded, reproducible)
+  tests/                 90 unit tests
+  examples/              End-to-end demo of the observe→propose cycle
+skills/
+  lynx-agent/SKILL.md    Agent choreography and inviolable rules
+auditoria/               Audit report on the LYNX SHARE native model
+docs/                    Utility documentation
+plan.md                  Master plan (phases 0–2C)
+token_budget.py          Context-budget utility
+```
+
+## Status
+
+- **Phase 0 — Audit** ✔︎ Native model and remote-edit path of LYNX SHARE reviewed at source level; decision: reuse lynx-mcp, no C++ extension.
+- **Phase 1 — Observe** ✔︎ Analysis and signed proposals; the project is never touched.
+- **Phase 2A — Minimal write** ✔︎ Approval dialog, atomic apply, post-write verification, native undo/redo verified live.
+- **Phase 2B — Transforms** ✔︎ Transpose, velocity, quantize, humanize (seeded), verified live.
+- **Phase 2C — Generation** ✔︎ Groove templates and fills, verified live.
+- **Real-world use** ✔︎ A 16-bar piano break (38 notes) composed from a song's motif and progression, applied and verified.
+
+## Acknowledgments
+
+- [LYNX SHARE](https://github.com/Ka1-S/LYNX-SHARE) by Ka1-S — the DAW, and the inspiration for the name.
+- [lynx-mcp](https://github.com/ITAgnesmeyer/lynx-mcp) by ITAgnesmeyer — the MCP transport, reused unmodified.
+
+## License
+
+No license chosen yet — all rights reserved for now.
