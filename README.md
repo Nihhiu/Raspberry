@@ -1,4 +1,4 @@
-<h1 align="center">Raspberry 🍇</h1>
+<h1 align="center">Raspberry</h1>
 
 <p align="center"><strong>An AI composition agent for <a href="https://github.com/Ka1-S/LYNX-SHARE">LYNX SHARE</a>.</strong><br>
 It observes your project, analyzes the music, and proposes MIDI edits — nothing is written until <em>you</em> approve it.<br>
@@ -11,7 +11,8 @@ Named for something in the FL Studio theme: something red, like the LYNX.</p>
   <a href="#usage">Usage</a> ·
   <a href="#safety">Safety</a> ·
   <a href="#project-structure">Structure</a> ·
-  <a href="#status">Status</a>
+  <a href="#status">Status</a> ·
+  <a href="#license">License</a>
 </p>
 
 <p align="center">
@@ -19,6 +20,7 @@ Named for something in the FL Studio theme: something red, like the LYNX.</p>
   <img src="https://img.shields.io/badge/tests-90%20passing-5cb85c" alt="90 tests passing">
   <img src="https://img.shields.io/badge/Windows-10%20%C2%B7%2011-24292f" alt="Windows 10 and 11">
   <img src="https://img.shields.io/badge/status-beta-f0ad4e" alt="Beta">
+  <img src="https://img.shields.io/badge/license-GPLv3-5cb85c" alt="GPLv3 license">
 </p>
 
 ---
@@ -40,14 +42,22 @@ The agent layer is pure Python with no runtime dependencies. The transport is
 [lynx-mcp](https://github.com/ITAgnesmeyer/lynx-mcp), reused unmodified, which speaks the `lynx-control/1` protocol to
 the DAW over a local TCP loopback connection.
 
+Raspberry is not tied to one AI client. It works with any MCP-capable client (OpenCode, Claude Desktop, Codex, …) —
+each brings its own orchestration on top of the same tools — and the Python package can also be driven directly from
+your own scripts, with no AI client at all. The approval dialog, the proposal contract and the verification pipeline
+are the same in every case.
+
 ## How it works
 
 ```
 You (approval dialog) ── approve / refuse
         │
-OpenCode agent ── orchestrates ──► agent/lynx_agent (pure Python)
-        │                               │  analyze · propose · verify
-        ▼                               ▼
+AI client (OpenCode, Claude Desktop, …) ── orchestrates
+        │
+        ▼
+agent/lynx_agent (pure Python: analyze · propose · apply · verify)
+        │
+        ▼
    lynx-mcp (MCP transport, 26 lynx_* tools)
         │  TCP loopback · lynx-control/1 · HMAC auth
         ▼
@@ -64,7 +74,8 @@ from your click on **Approve** — the agent can present the dialog, but can nev
 
 - Windows 10/11 with [LYNX SHARE](https://github.com/Ka1-S/LYNX-SHARE/releases) 0.1.31.1 (alpha) installed
 - [Python 3.12+](https://www.python.org/downloads/) and [uv](https://docs.astral.sh/uv/)
-- An [OpenCode](https://opencode.ai) session running in this folder (picks up `opencode.json` automatically)
+- An MCP-capable AI client to orchestrate the tools — for example [OpenCode](https://opencode.ai), which picks up
+  `opencode.json` in this folder automatically. Not required: you can also drive the agent layer directly from Python.
 
 ### Setup
 
@@ -90,7 +101,9 @@ python -m unittest discover agent/tests    # 90 tests
 
 ## Usage
 
-Talk to the agent in OpenCode and say what you want musically. For example:
+### With an AI client
+
+Open your MCP client in this folder and say what you want musically. For example:
 
 > *"Add a break with the piano between bars 97 and 113, following the motif and chord progression of the song."*
 
@@ -102,6 +115,21 @@ The agent will:
 4. **Ask** — a local approval dialog shows the diff; only your click creates the approval token.
 5. **Apply and verify** — writes atomically through the triple fence, then re-reads the project to confirm the result
    note by note before claiming success.
+
+### Without an AI client
+
+The agent layer is a plain Python package — proposals, approval and application work the same way from a script:
+
+```python
+from lynx_agent.proposals import ProposalCache
+from lynx_agent.approval import ApprovalGate
+from lynx_agent.apply import check_prereqs, compute_new_notes, verify_applied
+
+cache = ProposalCache(session_id="my-script")          # load a saved proposal
+proposal = cache.load("prop-0123456789ab")
+ApprovalGate(session_id="my-script").consume(proposal)  # your click, single use
+notes = compute_new_notes(proposal, current_notes)      # then write via lynx-mcp
+```
 
 Every accepted batch is one native undo step: rollback is always one `history.undo` away.
 
@@ -146,11 +174,11 @@ token_budget.py          Context-budget utility
 - **Phase 2C — Generation** ✔︎ Groove templates and fills, verified live.
 - **Real-world use** ✔︎ A 16-bar piano break (38 notes) composed from a song's motif and progression, applied and verified.
 
-## Acknowledgments
-
-- [LYNX SHARE](https://github.com/Ka1-S/LYNX-SHARE) by Ka1-S — the DAW, and the inspiration for the name.
-- [lynx-mcp](https://github.com/ITAgnesmeyer/lynx-mcp) by ITAgnesmeyer — the MCP transport, reused unmodified.
-
 ## License
 
-No license chosen yet — all rights reserved for now.
+Raspberry is licensed under the [GNU General Public License v3.0](LICENSE) — a copyleft license. Anyone who uses,
+modifies or redistributes it (including building something better on top of it) must release that work under the same
+license, so improvements stay free and open for everyone.
+
+- [LYNX SHARE](https://github.com/Ka1-S/LYNX-SHARE) by Ka1-S — the DAW, and the inspiration for the name (AGPL-3.0; Raspberry only talks to it over TCP).
+- [lynx-mcp](https://github.com/ITAgnesmeyer/lynx-mcp) by ITAgnesmeyer — the MCP transport, reused unmodified (MIT).
