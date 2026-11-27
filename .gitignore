@@ -1,0 +1,14 @@
+# Clones de referência (repos externos, nunca publicados aqui)
+/lynx-mcp/
+/lynx-share/
+
+# Cérebro do Operator (privado)
+/.operator/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Artefactos locais
+*.approval.json
